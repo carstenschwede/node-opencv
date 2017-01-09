@@ -17,6 +17,7 @@ public:
   static NAN_METHOD(DrawChessboardCorners);
   static NAN_METHOD(CalibrateCamera);
   static NAN_METHOD(SolvePnP);
+  static NAN_METHOD(SolvePnPRansac);
   static NAN_METHOD(GetOptimalNewCameraMatrix);
   static NAN_METHOD(StereoCalibrate);
   static NAN_METHOD(StereoRectify);
