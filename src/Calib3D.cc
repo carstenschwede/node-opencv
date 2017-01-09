@@ -108,6 +108,7 @@ void Calib3D::Init(Local<Object> target) {
   Nan::SetMethod(obj, "drawChessboardCorners", DrawChessboardCorners);
   Nan::SetMethod(obj, "calibrateCamera", CalibrateCamera);
   Nan::SetMethod(obj, "solvePnP", SolvePnP);
+  Nan::SetMethod(obj, "solvePnPRansac", SolvePnPRansac);
   Nan::SetMethod(obj, "getOptimalNewCameraMatrix", GetOptimalNewCameraMatrix);
   Nan::SetMethod(obj, "stereoCalibrate", StereoCalibrate);
   Nan::SetMethod(obj, "stereoRectify", StereoRectify);
@@ -273,7 +274,94 @@ NAN_METHOD(Calib3D::SolvePnP) {
     // solve for r and t
     cv::Mat rvec, tvec;
 
+    rvec = cv::Mat::zeros(3,1,CV_64F);
+    tvec = cv::Mat::zeros(3,1,CV_64F);
+
     cv::solvePnP(objectPoints, imagePoints, K, dist, rvec, tvec);
+
+    // make the return values
+    Local<Object> ret = Nan::New<Object>();
+
+    // rvec
+    Local<Object> rMatrixWrap = matrixFromMat(rvec);
+    ret->Set(Nan::New<String>("rvec").ToLocalChecked(), rMatrixWrap);
+
+    // rvec
+    cv::Mat rotMatrix;
+    cv::Rodrigues(rvec,rotMatrix);
+
+    rotMatrix = rotMatrix.t();  // rotation of inverse
+    tvec = -rotMatrix * tvec; // translation of inverse
+
+    cv::Mat T(4, 4, rotMatrix.type()); // T is 4x4
+    T( cv::Range(0,3), cv::Range(0,3) ) = rotMatrix * 1; // copies R into T
+    T( cv::Range(0,3), cv::Range(3,4) ) = tvec * 1; // copies tvec into T
+    // fill the last row of T (NOTE: depending on your types, use float or double)
+    double *p = T.ptr<double>(3);
+    p[0] = p[1] = p[2] = 0; p[3] = 1;
+
+    Local<Object> rotMatrixWrap = matrixFromMat(T);
+    ret->Set(Nan::New<String>("rmat").ToLocalChecked(), rotMatrixWrap);
+
+    // tvec
+    Local<Object> tMatrixWrap = matrixFromMat(tvec);
+    ret->Set(Nan::New<String>("tvec").ToLocalChecked(), tMatrixWrap);
+
+    // Return
+    info.GetReturnValue().Set(ret);
+
+  } catch (cv::Exception &e) {
+    const char *err_msg = e.what();
+    Nan::ThrowError(err_msg);
+    return;
+  }
+}
+
+
+// cv::solvePnPRansac
+NAN_METHOD(Calib3D::SolvePnPRansac) {
+  Nan::EscapableHandleScope scope;
+
+  try {
+    // Get the arguments
+
+    // Arg 0, the array of object points
+    std::vector<cv::Point3f> objectPoints = points3fFromArray(info[0]);
+
+    // Arg 1, the image points
+    std::vector<cv::Point2f> imagePoints = points2fFromArray(info[1]);
+
+    // Arg 2, the camera matrix
+    cv::Mat K = matFromMatrix(info[2]);
+
+    // Arg 3, the distortion coefficients
+    cv::Mat dist = matFromMatrix(info[3]);
+
+    // Arg 4, use extrinsic guess, skipped for now
+    bool useExtrinsicGuess = info[4]->ToBoolean()->Value();
+
+    // Arg 5
+    int iterationsCount = info[5]->ToNumber()->Value();
+
+    // Arg 6
+    float reprojectionError=info[6]->ToNumber()->Value();
+
+    // Arg 7
+    float confidence=info[7]->ToNumber()->Value();
+
+    //Arg 8
+  //  std::vector<cv::Point3f> inliers;
+
+    //Arg 9
+    int flags = info[8]->ToNumber()->Value();
+
+    // solve for r and t
+    cv::Mat rvec, tvec;
+    cv::Mat inliers;
+//    cv::solvePnPRansac(points_3d, points_2d, K, distCoeffs, Rvec, Tvec, false, 4000, 10.0, 0.99, inliers, CV_P3P);
+    srand(0);
+
+    cv::solvePnPRansac(objectPoints, imagePoints, K, dist, rvec, tvec,  false, 4000, 10.0, 0.99, inliers, CV_P3P);
 
     // make the return values
     Local<Object> ret = Nan::New<Object>();
